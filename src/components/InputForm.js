@@ -1,7 +1,42 @@
 import React from 'react';
 /* prettier-ignore */
 import { Form, FormGroup, Label, Input } from 'reactstrap';
+/* prettier-ignore */
+import { Card, CardImg, CardText, CardBody, CardTitle, CardSubtitle, Button, CardImgOverlay } from 'reactstrap';
+import styled from 'styled-components';
 import Graph from './Graph';
+import './InputForm.css';
+// import jumbo.jpg from 'C:\Users\Noah Amar\Pictures\';
+
+const StyledDiv = styled.div`
+  // background: red;
+`;
+
+const Example = props => {
+  return (
+    <div>
+      <Card inverse>
+        <CardImg
+          width="100%"
+          src={'/src/images/jumbo.jpg'}
+          alt="Card image cap"
+        />
+        <CardImgOverlay>
+          <CardTitle>Card Title</CardTitle>
+          <CardText>
+            The calculations are starting January 1, {this.state.labels[0]} and
+            assuming the first two years are paying back Lambda School at 17%,
+            then investing that 17% in a general S&P 500 Index fund (~10%
+            historical return over long periods of time).<br />
+          </CardText>
+          <CardText>
+            <small className="text-muted">Last updated 3 mins ago</small>
+          </CardText>
+        </CardImgOverlay>
+      </Card>
+    </div>
+  );
+};
 
 class InputForm extends React.Component {
   constructor(props) {
@@ -13,15 +48,19 @@ class InputForm extends React.Component {
       retireAge: 65,
       curIncome: 45000,
       newIncome: 70000,
-      curTaxRate: 0.22,
-      newTaxRate: 0.22,
-      investmentReturn: 0.11,
+      curInvestment: 0,
+      newInvestment: 0,
+      investmentReturn: 0.1,
       married: false,
       annualRaise: 0.04,
-      percentInvested: 0.17,
+      percentToInvest: 0.17,
       curData: [],
       newData: [],
+      newDataNoInvest: [],
       labels: [],
+      curMax: 0,
+      newMax: 0,
+      paidBack: 0,
     };
   }
 
@@ -30,42 +69,111 @@ class InputForm extends React.Component {
   }
 
   calculateData = () => {
-    let curData = [];
-    let newData = [];
+    let {age, retireAge} = this.state;
+    let yearsWorking = retireAge - age;
+
+    //true means current salary
+    this.makeDataArr(yearsWorking, true);
+    //false means new salary
+    this.makeDataArr(yearsWorking, false);
+  };
+
+  makeDataArr = (years, current) => {
+    let annualSalary, maxSalary, percentToInvest;
     let labels = [];
     let yearStart = new Date().getFullYear() + 1;
-    for (let i = 0; i < 40; i++) {
-      curData.push(25000 + i * 1000);
-      newData.push(55000 + i * 1000);
-      labels.push(yearStart + i);
+
+    if (current) {
+      annualSalary = this.state.curIncome;
+      maxSalary = 100000;
+      // percentToInvest = 0.0;
+      percentToInvest = 0.17;
+    } else {
+      annualSalary = this.state.newIncome;
+      maxSalary = 150000;
+      // percentToInvest = 0;
+      percentToInvest = this.state.percentToInvest;
     }
 
-    this.setState({ curData, newData, labels });
+    let dataArr = [];
+    let newDataNoInvest = [];
+    let owedLambda = 0;
+    let investedTotal = 0;
+    let salaryTotal = 0;
+    let netWorth = 0;
 
-    /* prettier-ignore */
-    let {age, retireAge, curIncome, newIncome, curTaxRate, newTaxRate, investmentReturn, married, annualRaise, percentInvested} = this.state;
-    // how long 'til retire
-    let yearsWorking = retireAge - age;
+    for (let i = 0; i <= years; i++) {
+      let afterTaxesSalary =
+        annualSalary - annualSalary * this.calculateTaxRate(annualSalary);
+      let investedAmount = afterTaxesSalary * percentToInvest;
+      let afterInvestedSalary = afterTaxesSalary - investedAmount;
+
+      //pay back Lambda School
+      if (!current && owedLambda < 30001 && i < 2 && annualSalary > 50000) {
+        owedLambda += annualSalary * 0.17;
+        if (owedLambda > 30000) investedAmount = owedLambda - 30000;
+        else investedAmount = 0;
+      }
+
+      investedTotal =
+        investedTotal * (1 + this.state.investmentReturn) + investedAmount;
+
+      salaryTotal += afterInvestedSalary;
+      netWorth = salaryTotal + investedTotal;
+      //for no invest graph
+      newDataNoInvest.push(salaryTotal);
+      dataArr.push(Number(netWorth.toFixed(2)));
+
+      //labels for graph
+      labels.push(yearStart + i);
+
+      //annual raise
+      if (annualSalary < maxSalary) annualSalary *= 1 + this.state.annualRaise;
+    }
+    if (current) {
+      this.setState({
+        curData: dataArr,
+        curMax: dataArr[dataArr.length - 1],
+        newDataNoInvest,
+        labels,
+      });
+    } else {
+      this.setState({
+        newData: dataArr,
+        newMax: dataArr[dataArr.length - 1],
+        newDataNoInvest,
+        labels,
+      });
+    }
   };
 
   handleInputChange = e => {
     let name = e.target.name;
-    this.setState({ [name]: e.target.value });
-    if (name === 'curIncome' || name === 'newIncome') this.setTaxRate();
-    this.calculateData();
+    let value = e.target.value;
+    if (name === 'age' && value < 18) value = 18;
+    if (name === 'retireAge' && value <= this.state.age)
+      value = this.state.age + 1;
+    if (name === 'curIncome' && value < 0) value = 0;
+    if (name === 'newIncome' && value < 0) value = 0;
+    this.setState({ [name]: value });
+    setTimeout(() => {
+      this.calculateData();
+    }, 0);
   };
 
   handleCheckChange = e => {
     this.setState({ married: !this.state.married });
-    this.setTaxRate();
+    setTimeout(() => {
+      this.calculateData();
+    }, 0);
   };
 
   calculateTaxRate = income => {
     /* 2018 tax form
-      10%	Up to $9,525	        Up to $19,050
-      12%	$9,526 to $38,700	    $19,051 to $77,400
-      22%	38,701 to $82,500	    $77,401 to $165,000
-      24%	$82,501 to $157,500	  $165,001 to $315,000
+      10%	Up       to   $9,525	      Up to  $19,050
+      12%	$9,526   to  $38,700	 $19,051 to  $77,400
+      22%	38,701   to  $82,500	 $77,401 to $165,000
+      24%	$82,501  to $157,500	$165,001 to $315,000
       32%	$157,501 to $200,000	$315,001 to $400,000
       35%	$200,001 to $500,000	$400,001 to $600,000
       37%	over $500,000	        over  $600,000
@@ -93,17 +201,39 @@ class InputForm extends React.Component {
     }
   };
 
-  setTaxRate = () => {
-    let curTaxRate = this.calculateTaxRate(this.state.curIncome);
-    let newTaxRate = this.calculateTaxRate(this.state.newIncome);
-    this.setState({ curTaxRate, newTaxRate });
-  };
-
   render() {
     return (
       <React.Fragment>
+        <StyledDiv>
+          The calculations are starting January 1, {this.state.labels[0]} and
+          assuming the first two years are paying back Lambda School at 17%,
+          then investing that 17% in a general S&P 500 Index fund (~10%
+          historical return over long periods of time).<br />
+          <span>
+            Lambda total ({this.state.newMax.toLocaleString('en-US', {
+              style: 'currency',
+              currency: 'USD',
+            })}){' - '}pre total: ({this.state.curMax.toLocaleString('en-US', {
+              style: 'currency',
+              currency: 'USD',
+            })}){':  '}
+            for a difference of{' '}
+            <strong>
+              {(this.state.newMax - this.state.curMax).toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+              })}
+            </strong>
+          </span>
+        </StyledDiv>
+        <hr />
+        <Graph
+          curData={this.state.curData}
+          newData={this.state.newData}
+          labels={this.state.labels}
+        />
         <Form inline>
-          <div className="row">
+          <div className="row all">
             <div className="col-sm-4">
               <FormGroup>
                 <Label>Name</Label>
@@ -115,7 +245,7 @@ class InputForm extends React.Component {
                 />
               </FormGroup>
             </div>
-            <div className="col-sm">
+            <div className="col-sm all">
               <FormGroup>
                 <Label style={{ padding: '0 5px' }}>Age</Label>
                 <Input
@@ -127,7 +257,7 @@ class InputForm extends React.Component {
                 />
               </FormGroup>
             </div>
-            <div className="col-sm">
+            <div className="col-sm all">
               <FormGroup>
                 <Label style={{ padding: '0 5px' }}>Retire Age</Label>
                 <Input
@@ -139,7 +269,7 @@ class InputForm extends React.Component {
                 />
               </FormGroup>
             </div>
-            <div className="col-sm">
+            <div className="col-sm all">
               <FormGroup check>
                 <Label check>
                   <Input
@@ -153,7 +283,7 @@ class InputForm extends React.Component {
               </FormGroup>
             </div>
           </div>
-          <div className="row">
+          <div className="row all">
             <div className="col">
               <FormGroup>
                 <Label style={{ padding: '0 5px' }}>Current Salary</Label>
@@ -166,7 +296,7 @@ class InputForm extends React.Component {
                 />
               </FormGroup>
             </div>
-            <div className="col">
+            <div className="col all">
               <FormGroup>
                 <Label style={{ padding: '0 5px' }}>New Salary</Label>
                 <Input
@@ -180,16 +310,6 @@ class InputForm extends React.Component {
             </div>
           </div>
         </Form>
-        The calculations are starting January 1, {this.state.labels[0]} and
-        assuming the first two years are paying back Lambda School at 17%, then
-        investing that 17% in a general S&P 500 Index fund (~11% return from
-        1973-2016)
-        <hr />
-        <Graph
-          curData={this.state.curData}
-          newData={this.state.newData}
-          labels={this.state.labels}
-        />
       </React.Fragment>
     );
   }
